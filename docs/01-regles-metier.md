@@ -35,18 +35,25 @@ Règles :
 
 ## 3. Saisie d'un passage
 
-### 3.1 Calcul litres ↔ montant
+### 3.1 Le pompiste saisit la somme, les litres sont calculés
 
-Le pompiste saisit **soit des litres, soit un montant**. Le serveur prend le **prix du jour** de la station (dernier `ProductPrice` dont `validFrom` ≤ heure du passage) et calcule l'autre valeur :
+En Côte d'Ivoire, le client demande une **somme** (« Gasoil 10 000 », « Super 2 500 »), pas un nombre de litres. L'app suit cet usage :
 
-- Saisie en litres : `montant = arrondi(litres × prix)` (FCFA entier)
-- Saisie en montant : `litres = arrondi(montant ÷ prix, 2 décimales)`
+- Le pompiste **tape au clavier la somme donnée par le client**, en FCFA entiers. Il n'y a ni saisie en litres, ni boutons de montants préréglés.
+- Le serveur prend le **prix du jour** de la station (dernier `ProductPrice` dont `validFrom` ≤ heure du passage) et calcule les litres : `litres = montant ÷ prix`, arrondi à **2 décimales**.
+- Les litres sont affichés à titre d'information (« = 13,99 L ») et servent **uniquement** au rapprochement avec les index des pompes (section 9) et aux plafonds par véhicule. Ils n'entrent jamais dans le calcul des points.
 
 Le prix appliqué est **recopié dans le passage**. Un changement de prix ultérieur ne modifie jamais l'historique.
 
-Exemple : Super à 875 F/L, saisie 15 L → 13 125 F. Saisie 10 000 F → 11,43 L.
+Exemples (prix d'exemple, à remplacer par les vrais) :
 
-Pour la boutique et les services : seul le montant est saisi.
+| Demande du client | Prix du jour | Litres calculés |
+|---|---|---|
+| Gasoil 10 000 | 715 F/L | 13,99 L |
+| Super 5 000 | 875 F/L | 5,71 L |
+| Gasoil 2 500 | 715 F/L | 3,50 L |
+
+Pour la boutique et les services : même saisie de la somme, sans litres.
 
 ### 3.2 Confirmation par le client
 
@@ -64,8 +71,8 @@ Dans cet ordre. Un contrôle **bloquant** refuse le passage (aucun point), un co
 | 1 | Client actif (ni bloqué ni supprimé) | Bloquant `CUSTOMER_INACTIVE` | — |
 | 2 | Le numéro du client n'est pas un numéro bloqué du pompiste (le sien ou un proche déclaré) | Bloquant `SELF_CREDIT_FORBIDDEN` | `SELF_CREDIT_ATTEMPT` (critique) |
 | 3 | PIN client correct | Bloquant `PIN_INVALID` / `PIN_LOCKED` | après N échecs |
-| 4 | Litres ≤ plafond du véhicule `[moto 15 L, voiture/taxi 80 L, gbaka 150 L, camion 600 L]` | Bloquant `VEHICLE_CAP_EXCEEDED` | oui |
-| 5 | Litres du jour pour ce client ≤ `[300 L]` | Bloquant `DAILY_CAP_EXCEEDED` | oui |
+| 4 | Litres calculés ≤ plafond du véhicule `[moto 15 L, voiture/taxi 80 L, gbaka 150 L, camion 600 L]` | Bloquant `VEHICLE_CAP_EXCEEDED` | oui |
+| 5 | Litres calculés du jour pour ce client ≤ `[300 L]` | Bloquant `DAILY_CAP_EXCEEDED` | oui |
 | 6 | Un prix du jour existe pour ce produit dans cette station | Bloquant `PRICE_MISSING` | — |
 | 7 | Passage compté comme visite ? (voir 3.4) | Non bloquant | — |
 | 8 | Synchronisé plus de `[30 min]` après le passage | Non bloquant, marqué `syncedLate` | `LATE_SYNC` (info) |
@@ -76,7 +83,7 @@ Un passage rapporte toujours ses points, mais il ne compte comme **visite** que 
 - le montant est ≥ `[2 000 F]`, **et**
 - la dernière visite comptée de ce client remonte à plus de `[4 h]`.
 
-Pourquoi : un pompiste pourrait découper un plein de 20 L en quatre saisies de 5 L pour gonfler le compteur de visites. Les points, eux, restent identiques (4 × 5 pts = 20 pts), donc découper ne rapporte rien.
+Pourquoi : un pompiste pourrait découper un passage de 10 000 F en quatre saisies de 2 500 F pour gonfler le compteur de visites. Les points, eux, restent identiques (4 × 2 pts = 8 pts contre 10 pts d'un coup : découper fait même perdre des points à cause de l'arrondi), donc découper ne rapporte rien.
 
 ### 3.5 Mode hors ligne
 
@@ -90,17 +97,19 @@ Si le réseau coupe, l'app pompiste **enregistre le passage dans le téléphone*
 
 ### 4.1 Gain
 
-Règles par défaut (à valider) :
+**Les points se calculent toujours sur la somme en FCFA, jamais sur les litres.** C'est la somme que le client donne et qu'il connaît : « j'ai mis 10 000, j'ai gagné 10 points » est facile à comprendre.
+
+Règles provisoires (valeurs réelles à fournir par la gérance, voir `04-valeurs-a-confirmer.md`) :
 
 | Produit | Règle | Exemple |
 |---|---|---|
-| Carburant | `[1 pt]` par `[1 L]` | 15 L → 15 pts |
-| Boutique | `[1 pt]` par `[500 F]` | 3 200 F → 6 pts |
-| Services (lavage…) | `[1 pt]` par `[500 F]` | |
+| Carburant | `[1 pt]` par tranche de `[1 000 F]` | Gasoil 10 000 F → 10 pts |
+| Boutique | `[1 pt]` par tranche de `[500 F]` | 3 200 F → 6 pts |
+| Services (lavage…) | `[1 pt]` par tranche de `[500 F]` | |
 
-- Toujours arrondi **à l'inférieur** : 11,43 L → 11 pts.
+- Formule : `points = arrondi inférieur(montant ÷ tranche) × points par tranche`. Exemple : 2 500 F de carburant → 2 pts.
 - Si plusieurs règles s'appliquent, la plus précise gagne : produit > catégorie, station > enseigne.
-- Pourquoi des points par litre pour le carburant : le prix change selon les décisions de l'État, le litre reste stable.
+- La gérance peut donner une tranche plus avantageuse à la boutique pour y attirer les clients.
 
 ### 4.2 Registre de points
 

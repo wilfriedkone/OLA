@@ -965,24 +965,24 @@ components:
 
     TransactionInput:
       type: object
-      required: [customerId, productId, inputMode, value]
+      required: [customerId, productId, amountXof]
       properties:
         customerId: { type: string, format: uuid }
         vehicleId: { type: string, format: uuid }
         productId: { type: string, format: uuid }
-        inputMode: { type: string, enum: [LITERS, AMOUNT] }
-        value:
-          type: number
-          description: Litres (2 décimales) si LITERS, FCFA entiers si AMOUNT
-          example: 15
+        amountXof:
+          type: integer
+          minimum: 1
+          description: Somme donnée par le client, tapée par le pompiste (FCFA entiers). Les litres sont calculés par le serveur.
+          example: 10000
 
     TransactionQuote:
       type: object
       properties:
-        liters: { type: [number, 'null'], example: 15 }
-        amountXof: { type: integer, example: 13125 }
-        unitPriceXof: { type: [integer, 'null'], example: 875 }
-        points: { type: integer, example: 15 }
+        amountXof: { type: integer, example: 10000 }
+        liters: { type: [number, 'null'], description: 'Calculé : montant ÷ prix du jour, 2 décimales', example: 13.99 }
+        unitPriceXof: { type: [integer, 'null'], example: 715 }
+        points: { type: integer, example: 10 }
         countsAsVisit: { type: boolean }
         warnings:
           type: array
@@ -1116,13 +1116,9 @@ components:
             properties:
               productId: { type: [string, 'null'], format: uuid }
               category: { type: [string, 'null'] }
-              type: { type: string, enum: [POINTS_PER_LITER, POINTS_PER_AMOUNT] }
-              points: { type: integer }
-              per: { type: number }
-        quickAmountsXof:
-          type: array
-          items: { type: integer }
-          example: [2000, 5000, 10000, 20000]
+              type: { type: string, enum: [POINTS_PER_AMOUNT] }
+              points: { type: integer, example: 1 }
+              per: { type: integer, description: Tranche en FCFA, example: 1000 }
         vehicleLiterCaps:
           type: object
           additionalProperties: { type: integer }

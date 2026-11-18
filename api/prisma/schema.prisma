@@ -399,11 +399,6 @@ model ReconciliationLine {
 // Passages (transactions)
 // -----------------------------------------------------------------------------
 
-enum TxInputMode {
-  LITERS // le pompiste a saisi des litres, le montant est calculé
-  AMOUNT // le pompiste a saisi un montant, les litres sont calculés
-}
-
 enum PaymentMethod {
   CASH
   MOBILE_MONEY
@@ -441,9 +436,11 @@ model Transaction {
   deviceId       String?        @db.Uuid
   shiftId        String?        @db.Uuid
   productId      String         @db.Uuid
-  inputMode      TxInputMode
-  liters         Decimal?       @db.Decimal(10, 2) // null pour boutique / services
+  /// Montant donné par le client et saisi par le pompiste : c'est LA donnée d'entrée.
   amountXof      Int
+  /// Calculé : montant ÷ prix du jour, 2 décimales. Sert au rapprochement avec les index.
+  /// null pour boutique / services.
+  liters         Decimal?       @db.Decimal(10, 2)
   unitPriceXof   Int? // prix au litre appliqué (copie)
   paymentMethod  PaymentMethod  @default(UNKNOWN)
   receiptRef     String? // n° de ticket si la boutique en imprime
@@ -502,8 +499,8 @@ model LoyaltySettings {
   organization Organization @relation(fields: [organizationId], references: [id])
 }
 
+/// Les points se calculent toujours sur le montant en FCFA, jamais sur les litres.
 enum LoyaltyRuleType {
-  POINTS_PER_LITER // points = floor(litres / per) * points
   POINTS_PER_AMOUNT // points = floor(montant / per) * points
 }
 
@@ -516,7 +513,7 @@ model LoyaltyRule {
   category       ProductCategory?
   type           LoyaltyRuleType
   points         Int // ex. 1
-  per            Decimal          @db.Decimal(10, 2) // ex. 1 (litre) ou 500 (FCFA)
+  per            Int // tranche en FCFA, ex. 1000 → 1 point par tranche de 1 000 F
   validFrom      DateTime
   validTo        DateTime?
   active         Boolean          @default(true)

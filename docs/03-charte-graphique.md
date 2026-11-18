@@ -46,6 +46,7 @@ Règle : jamais de texte ambre sur blanc (contraste insuffisant). L'ambre est un
 | Bouton d'action principal | 64 px de haut, rayon 16 | 60 px, rayon 16 |
 | Autres boutons, choix produit | 52–56 px | 44–52 px |
 | Touches du clavier PIN | 68 px | — |
+| Touches du clavier de saisie de la somme | 56 px | — |
 | Champ de saisie | 60 px, bordure 2 px | 52 px |
 | Rayon des cartes | 14–20 px | 18–22 px |
 
@@ -61,7 +62,7 @@ Règle : jamais de texte ambre sur blanc (contraste insuffisant). L'ambre est un
 | Écran | Rôle |
 |---|---|
 | Pompiste 1 · Identifier | Scanner le QR ou taper le numéro, ou inscrire un nouveau client |
-| Pompiste 2 · Saisir | Produit, litres ou FCFA, montants rapides, points calculés |
+| Pompiste 2 · Saisir | Produit, somme tapée au clavier, litres calculés (2 décimales), points calculés sur la somme |
 | Pompiste 3 · PIN | Le client vérifie le récapitulatif et tape son code |
 | Pompiste 4 · Confirmé | Points gagnés, nouveau solde, cadeau disponible |
 | Client 1 · Ma carte | QR code, solde, niveau, prochain cadeau, événement |
