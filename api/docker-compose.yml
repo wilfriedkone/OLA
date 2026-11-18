@@ -1,0 +1,14 @@
+# Base PostgreSQL locale pour le développement : `docker compose up -d`
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ola
+      POSTGRES_PASSWORD: ola
+      POSTGRES_DB: ola_station
+    ports:
+      - "5432:5432"
+    volumes:
+      - ola_db:/var/lib/postgresql/data
+volumes:
+  ola_db:

@@ -34,14 +34,26 @@ Site pilote : **Ola Latrie, Abidjan**. Architecture multi-stations et multi-ense
 
 - [x] **Étape 1** : modèle de données, règles métier, contrat d'API
 - [x] Étape 1 bis : charte graphique et maquettes (docs/03-charte-graphique.md)
-- [ ] **Étape 2** : serveur (inscription, passages, PIN, anti-fraude, points) + app pompiste
+- [ ] **Étape 2** : serveur + app pompiste
+  - [x] Socle NestJS + PostgreSQL, migration initiale, route `/health`
+  - [x] Règles métier codées et testées (litres calculés, points, visites, contrôles, PIN, rapprochement)
+  - [ ] Inscription par OTP, saisie de passage avec PIN, registre de points
+  - [ ] App pompiste Flutter
 - [ ] **Étape 3** : app client + back-office
 - [ ] **Étape 4** : test réel à Ola Latrie
 
 ## Démarrer (serveur)
 
+Prérequis : Node.js 22, Docker (pour la base locale).
+
 ```bash
 cd api
+cp .env.example .env
+docker compose up -d
 npm install
-npm run prisma:validate
+npm run db:migrate
+npm test
+npm run build && npm start
 ```
+
+Vérifier : `http://localhost:3000/health` doit répondre `{"status":"ok","database":"ok"}`.
