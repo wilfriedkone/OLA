@@ -1,0 +1,814 @@
+// =============================================================================
+// OLA STATION — Modèle de données (source de vérité)
+// -----------------------------------------------------------------------------
+// Principes :
+//  - Multi-enseignes dès le départ : toute donnée métier porte organizationId.
+//    Une enseigne ne voit jamais les données d'une autre (RLS PostgreSQL + filtres API).
+//  - Montants en FCFA : entiers (Int), jamais de décimales.
+//  - Litres : Decimal(10,2).
+//  - Les points ne sont JAMAIS modifiés directement : chaque mouvement est une
+//    ligne du registre (PointsLedgerEntry). Le solde = somme des lignes.
+//  - Les identifiants de passage (Transaction.id) sont générés par l'app pompiste
+//    (UUID) pour permettre la saisie hors ligne sans doublon.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enseignes, stations, équipements
+// -----------------------------------------------------------------------------
+
+/// Enseigne (ex. « Ola Latrie »). Unité de cloisonnement des données.
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  settings      LoyaltySettings?
+  stations      Station[]
+  staff         StaffUser[]
+  customers     Customer[]
+  products      Product[]
+  loyaltyRules  LoyaltyRule[]
+  tiers         Tier[]
+  rewards       Reward[]
+  announcements Announcement[]
+  transactions  Transaction[]
+  ledger        PointsLedgerEntry[]
+  reviews       Review[]
+  fraudAlerts   FraudAlert[]
+  auditLogs     AuditLog[]
+}
+
+model Station {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  city           String   @default("Abidjan")
+  address        String?
+  timezone       String   @default("Africa/Abidjan")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  devices      Device[]
+  pumps        Pump[]
+  prices       ProductPrice[]
+  staff        StaffUser[]
+  shifts       Shift[]
+  transactions Transaction[]
+  reviews      Review[]
+
+  @@index([organizationId])
+}
+
+/// Téléphone ou tablette de la station, enrôlé par le gérant.
+/// Les pompistes s'y connectent avec leur code PIN personnel.
+model Device {
+  id         String    @id @default(uuid()) @db.Uuid
+  stationId  String    @db.Uuid
+  name       String // ex. « Téléphone pompe 1-2 »
+  active     Boolean   @default(true)
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  station      Station       @relation(fields: [stationId], references: [id])
+  transactions Transaction[]
+
+  @@index([stationId])
+}
+
+model Pump {
+  id        String @id @default(uuid()) @db.Uuid
+  stationId String @db.Uuid
+  number    Int // numéro peint sur la pompe
+
+  station Station  @relation(fields: [stationId], references: [id])
+  nozzles Nozzle[]
+
+  @@unique([stationId, number])
+}
+
+/// Pistolet : un produit, un compteur (totalisateur / index).
+model Nozzle {
+  id        String  @id @default(uuid()) @db.Uuid
+  pumpId    String  @db.Uuid
+  productId String  @db.Uuid
+  label     String // ex. « P3 Super »
+  active    Boolean @default(true)
+
+  pump     Pump           @relation(fields: [pumpId], references: [id])
+  product  Product        @relation(fields: [productId], references: [id])
+  readings MeterReading[]
+}
+
+// -----------------------------------------------------------------------------
+// Personnel
+// -----------------------------------------------------------------------------
+
+enum StaffRole {
+  SUPER_ADMIN // éditeur de la plateforme (multi-enseignes)
+  ORG_ADMIN // administrateur de l'enseigne
+  MANAGER // gérant d'une station
+  ATTENDANT // pompiste
+  CASHIER // caissier boutique
+}
+
+model StaffUser {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @db.Uuid // null uniquement pour SUPER_ADMIN
+  stationId      String?   @db.Uuid // null pour ORG_ADMIN / SUPER_ADMIN
+  role           StaffRole
+  firstName      String
+  lastName       String
+  phone          String // E.164, ex. +2250708000000
+  staffCode      String // code court tapé sur l'appareil partagé, ex. « 104 »
+  pinHash        String // PIN de connexion à l'app pompiste
+  passwordHash   String? // back-office web (gérant / admin)
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  organization    Organization?       @relation(fields: [organizationId], references: [id])
+  station         Station?            @relation(fields: [stationId], references: [id])
+  /// Numéros que ce membre du personnel ne peut pas créditer (lui-même, proches déclarés).
+  blockedPhones   StaffBlockedPhone[]
+  shifts          Shift[]
+  transactions    Transaction[]       @relation("TxAttendant")
+  reviews         Review[]            @relation("ReviewAttendant")
+  handledReviews  Review[]            @relation("ReviewHandler")
+  registeredUsers Customer[]          @relation("RegisteredBy")
+
+  @@unique([organizationId, staffCode])
+  @@index([stationId])
+}
+
+model StaffBlockedPhone {
+  id      String @id @default(uuid()) @db.Uuid
+  staffId String @db.Uuid
+  phone   String
+  reason  String @default("Numéro personnel")
+
+  staff StaffUser @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, phone])
+  @@index([phone])
+}
+
+// -----------------------------------------------------------------------------
+// Clients
+// -----------------------------------------------------------------------------
+
+enum CustomerStatus {
+  ACTIVE
+  BLOCKED
+  DELETED // données anonymisées, historique conservé pour la comptabilité des points
+}
+
+enum SignupChannel {
+  CUSTOMER_APP // inscrit seul depuis l'app client
+  ATTENDANT_APP // inscription express à la pompe
+  ADMIN
+}
+
+enum NotificationChannel {
+  PUSH
+  SMS
+  WHATSAPP
+}
+
+model Customer {
+  id                    String              @id @default(uuid()) @db.Uuid
+  organizationId        String              @db.Uuid
+  phone                 String // E.164 — identifiant principal
+  firstName             String
+  lastName              String?
+  email                 String?
+  /// Jeton opaque contenu dans le QR code (jamais le numéro en clair). Régénérable.
+  qrToken               String              @unique
+  pinHash               String
+  pinFailedCount        Int                 @default(0)
+  pinLockedUntil        DateTime?
+  phoneVerified         Boolean             @default(false) // OTP SMS validé
+  hasSmartphone         Boolean             @default(false) // a déjà ouvert l'app client
+  preferredChannel      NotificationChannel @default(SMS)
+  marketingConsent      Boolean             @default(false)
+  marketingConsentAt    DateTime?
+  termsAcceptedAt       DateTime
+  status                CustomerStatus      @default(ACTIVE)
+  signupChannel         SignupChannel
+  registeredById        String?             @db.Uuid
+  registeredAtStationId String?             @db.Uuid
+  /// Cache du solde, mis à jour dans la même transaction SQL que le registre.
+  pointsBalance         Int                 @default(0)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  organization  Organization        @relation(fields: [organizationId], references: [id])
+  registeredBy  StaffUser?          @relation("RegisteredBy", fields: [registeredById], references: [id])
+  vehicles      Vehicle[]
+  transactions  Transaction[]
+  ledger        PointsLedgerEntry[]
+  redemptions   Redemption[]
+  reviews       Review[]
+  claims        AnnouncementClaim[]
+  pushTokens    PushToken[]
+  notifications Notification[]
+
+  @@unique([organizationId, phone])
+  @@index([organizationId, createdAt])
+}
+
+enum VehicleType {
+  MOTO
+  CAR // voiture particulière
+  TAXI
+  MINIBUS // gbaka, minicar
+  TRUCK // camion
+  OTHER
+}
+
+model Vehicle {
+  id         String      @id @default(uuid()) @db.Uuid
+  customerId String      @db.Uuid
+  type       VehicleType
+  plate      String? // immatriculation, facultative
+  isDefault  Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  transactions Transaction[]
+}
+
+model PushToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @db.Uuid
+  token      String   @unique
+  platform   String // android | ios
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+enum OtpPurpose {
+  REGISTER
+  LOGIN
+  PIN_RESET
+  ASSISTED_SIGNUP // inscription à la pompe : le code est lu au pompiste par le client
+}
+
+model OtpChallenge {
+  id         String     @id @default(uuid()) @db.Uuid
+  phone      String
+  purpose    OtpPurpose
+  codeHash   String
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// Produits et prix
+// -----------------------------------------------------------------------------
+
+enum ProductCategory {
+  FUEL // carburant (en litres)
+  SHOP // boutique (au montant)
+  SERVICE // lavage, vidange... (au montant)
+  GAS // bouteilles de gaz (au montant)
+}
+
+enum ProductUnit {
+  LITER
+  AMOUNT // pas de quantité, uniquement un montant en FCFA
+}
+
+model Product {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  code           String // SUPER, GASOIL, BOUTIQUE, LAVAGE...
+  name           String
+  category       ProductCategory
+  unit           ProductUnit
+  active         Boolean         @default(true)
+  sortOrder      Int             @default(0)
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  prices       ProductPrice[]
+  nozzles      Nozzle[]
+  transactions Transaction[]
+  loyaltyRules LoyaltyRule[]
+
+  @@unique([organizationId, code])
+}
+
+/// Prix par station, historisé. Le prix applicable à un instant T est la ligne
+/// avec le plus grand validFrom <= T. Le prix est recopié dans chaque passage.
+model ProductPrice {
+  id           String   @id @default(uuid()) @db.Uuid
+  stationId    String   @db.Uuid
+  productId    String   @db.Uuid
+  unitPriceXof Int // ex. 875 (FCFA / litre)
+  validFrom    DateTime
+  setById      String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([stationId, productId, validFrom])
+}
+
+// -----------------------------------------------------------------------------
+// Services (quarts) et index des pompes
+// -----------------------------------------------------------------------------
+
+enum ShiftStatus {
+  OPEN
+  CLOSED // index de fin saisis, rapprochement calculé
+  REVIEWED // validé par le gérant
+}
+
+model Shift {
+  id           String      @id @default(uuid()) @db.Uuid
+  stationId    String      @db.Uuid
+  attendantId  String      @db.Uuid
+  status       ShiftStatus @default(OPEN)
+  startedAt    DateTime    @default(now())
+  endedAt      DateTime?
+  reviewedById String?     @db.Uuid
+  managerNote  String?
+
+  station        Station              @relation(fields: [stationId], references: [id])
+  attendant      StaffUser            @relation(fields: [attendantId], references: [id])
+  readings       MeterReading[]
+  transactions   Transaction[]
+  reconciliation ReconciliationLine[]
+
+  @@index([stationId, startedAt])
+}
+
+enum ReadingKind {
+  START
+  END
+}
+
+model MeterReading {
+  id           String      @id @default(uuid()) @db.Uuid
+  shiftId      String      @db.Uuid
+  nozzleId     String      @db.Uuid
+  kind         ReadingKind
+  valueLiters  Decimal     @db.Decimal(14, 2) // index du totalisateur
+  photoUrl     String? // photo du compteur
+  recordedById String      @db.Uuid
+  recordedAt   DateTime    @default(now())
+
+  shift  Shift  @relation(fields: [shiftId], references: [id])
+  nozzle Nozzle @relation(fields: [nozzleId], references: [id])
+
+  @@unique([shiftId, nozzleId, kind])
+}
+
+/// Résultat du rapprochement d'un service, par produit carburant.
+model ReconciliationLine {
+  id            String  @id @default(uuid()) @db.Uuid
+  shiftId       String  @db.Uuid
+  productId     String  @db.Uuid
+  pumpedLiters  Decimal @db.Decimal(12, 2) // somme (index fin - index début)
+  loyaltyLiters Decimal @db.Decimal(12, 2) // somme des litres saisis pour des clients
+  captureRate   Decimal @db.Decimal(5, 4) // loyalty / pumped, ex. 0.3500
+  overCaptured  Boolean // loyalty > pumped + tolérance → alerte
+
+  shift Shift @relation(fields: [shiftId], references: [id])
+
+  @@unique([shiftId, productId])
+}
+
+// -----------------------------------------------------------------------------
+// Passages (transactions)
+// -----------------------------------------------------------------------------
+
+enum TxInputMode {
+  LITERS // le pompiste a saisi des litres, le montant est calculé
+  AMOUNT // le pompiste a saisi un montant, les litres sont calculés
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  CARD
+  OTHER
+  UNKNOWN
+}
+
+enum TxSource {
+  ATTENDANT_APP
+  IMPORT // import CSV
+  INTEGRATION // future intégration caisse / pompes
+  ADMIN // saisie de régularisation par le gérant
+}
+
+enum TxConfirmation {
+  CUSTOMER_PIN // le client a tapé son PIN sur l'appareil du pompiste
+  NONE // import ou régularisation (jamais depuis l'app pompiste)
+}
+
+enum TxStatus {
+  VALIDATED
+  REJECTED // contrôle échoué (PIN faux à la synchro, plafond...)
+  CANCELLED // annulé par le gérant (une écriture inverse est créée)
+}
+
+model Transaction {
+  /// UUID généré par l'appareil : un renvoi après coupure réseau ne crée pas de doublon.
+  id             String         @id @db.Uuid
+  organizationId String         @db.Uuid
+  stationId      String         @db.Uuid
+  customerId     String         @db.Uuid
+  vehicleId      String?        @db.Uuid
+  attendantId    String         @db.Uuid
+  deviceId       String?        @db.Uuid
+  shiftId        String?        @db.Uuid
+  productId      String         @db.Uuid
+  inputMode      TxInputMode
+  liters         Decimal?       @db.Decimal(10, 2) // null pour boutique / services
+  amountXof      Int
+  unitPriceXof   Int? // prix au litre appliqué (copie)
+  paymentMethod  PaymentMethod  @default(UNKNOWN)
+  receiptRef     String? // n° de ticket si la boutique en imprime
+  source         TxSource
+  confirmation   TxConfirmation
+  occurredAt     DateTime // heure sur l'appareil au moment du passage
+  receivedAt     DateTime       @default(now()) // heure de réception par le serveur
+  syncedLate     Boolean        @default(false) // saisi hors ligne, envoyé plus tard
+  status         TxStatus
+  rejectionCode  String?
+  countsAsVisit  Boolean // compte comme un passage (montant mini + délai respectés)
+  pointsAwarded  Int            @default(0)
+  cancelledById  String?        @db.Uuid
+  cancelReason   String?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  station      Station             @relation(fields: [stationId], references: [id])
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  vehicle      Vehicle?            @relation(fields: [vehicleId], references: [id])
+  attendant    StaffUser           @relation("TxAttendant", fields: [attendantId], references: [id])
+  device       Device?             @relation(fields: [deviceId], references: [id])
+  shift        Shift?              @relation(fields: [shiftId], references: [id])
+  product      Product             @relation(fields: [productId], references: [id])
+  ledger       PointsLedgerEntry[]
+  review       Review?
+
+  @@index([organizationId, occurredAt])
+  @@index([stationId, occurredAt])
+  @@index([customerId, occurredAt])
+  @@index([attendantId, occurredAt])
+}
+
+// -----------------------------------------------------------------------------
+// Fidélité : règles, niveaux, registre de points, cadeaux
+// -----------------------------------------------------------------------------
+
+/// Paramètres globaux de l'enseigne. Tous modifiables par l'ORG_ADMIN.
+model LoyaltySettings {
+  organizationId             String  @id @db.Uuid
+  minVisitAmountXof          Int     @default(2000) // montant mini pour compter un passage
+  minHoursBetweenVisits      Int     @default(4) // délai mini entre deux passages comptés
+  /// Plafond de litres par passage selon le type de véhicule.
+  /// ex. {"MOTO": 15, "CAR": 80, "TAXI": 80, "MINIBUS": 150, "TRUCK": 600, "OTHER": 100}
+  vehicleLiterCaps           Json
+  dailyLiterCapPerCustomer   Int     @default(300)
+  pinMaxAttempts             Int     @default(3)
+  pinLockMinutes             Int     @default(15)
+  lateSyncMinutes            Int     @default(30) // au-delà : passage marqué « synchro tardive »
+  reconciliationTolerancePct Decimal @default(0.5) @db.Decimal(4, 2)
+  tierWindowMonths           Int     @default(3) // niveau calculé sur les points gagnés sur N mois
+  pointsExpiryMonths         Int? // null = les points n'expirent pas
+  reviewWindowHours          Int     @default(72) // délai pour noter un passage
+  lowRatingAlertThreshold    Int     @default(2) // alerte gérant si note <=
+  requireOtpOnAssistedSignup Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+enum LoyaltyRuleType {
+  POINTS_PER_LITER // points = floor(litres / per) * points
+  POINTS_PER_AMOUNT // points = floor(montant / per) * points
+}
+
+/// Règle de gain. La plus spécifique s'applique : produit > catégorie, station > enseigne.
+model LoyaltyRule {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  stationId      String?          @db.Uuid // null = toutes les stations
+  productId      String?          @db.Uuid
+  category       ProductCategory?
+  type           LoyaltyRuleType
+  points         Int // ex. 1
+  per            Decimal          @db.Decimal(10, 2) // ex. 1 (litre) ou 500 (FCFA)
+  validFrom      DateTime
+  validTo        DateTime?
+  active         Boolean          @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  product      Product?     @relation(fields: [productId], references: [id])
+
+  @@index([organizationId, active])
+}
+
+model Tier {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String // Bronze, Silver, Gold
+  rank           Int // 1, 2, 3
+  minPoints      Int // points gagnés sur la fenêtre (tierWindowMonths)
+  benefits       String?
+  color          String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, rank])
+}
+
+enum LedgerType {
+  EARN // gain sur un passage
+  REDEEM // échange contre un cadeau
+  REVERSAL // annulation d'un passage ou d'un échange
+  ADJUST // correction manuelle par le gérant (motif obligatoire)
+  EXPIRE
+  BONUS // événement, parrainage (phase 2)
+}
+
+/// Registre des points : on ajoute des lignes, on ne modifie ni ne supprime jamais.
+model PointsLedgerEntry {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  customerId     String     @db.Uuid
+  stationId      String?    @db.Uuid
+  type           LedgerType
+  delta          Int // positif ou négatif
+  balanceAfter   Int
+  transactionId  String?    @db.Uuid
+  redemptionId   String?    @db.Uuid
+  createdById    String?    @db.Uuid // personnel à l'origine (ADJUST, REVERSAL)
+  reason         String?
+  createdAt      DateTime   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+  transaction  Transaction? @relation(fields: [transactionId], references: [id])
+  redemption   Redemption?  @relation(fields: [redemptionId], references: [id])
+
+  /// Garantie « une seule fois » : un passage ne rapporte qu'un seul EARN et un seul REVERSAL.
+  @@unique([transactionId, type])
+  @@unique([redemptionId, type])
+  @@index([customerId, createdAt])
+}
+
+model Reward {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  stationId      String?   @db.Uuid // null = disponible partout
+  name           String // ex. « Lavage offert »
+  description    String?
+  imageUrl       String?
+  pointsCost     Int
+  stock          Int? // null = illimité
+  maxPerCustomer Int? // par client sur toute la période
+  minTierRank    Int? // réservé à un niveau minimum
+  validFrom      DateTime?
+  validTo        DateTime?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  redemptions  Redemption[]
+}
+
+enum RedemptionStatus {
+  FULFILLED // cadeau remis
+  CANCELLED // annulé, points rendus
+}
+
+model Redemption {
+  id          String           @id @default(uuid()) @db.Uuid
+  rewardId    String           @db.Uuid
+  customerId  String           @db.Uuid
+  stationId   String           @db.Uuid
+  staffId     String           @db.Uuid // qui a remis le cadeau
+  pointsSpent Int
+  status      RedemptionStatus @default(FULFILLED)
+  createdAt   DateTime         @default(now())
+
+  reward   Reward              @relation(fields: [rewardId], references: [id])
+  customer Customer            @relation(fields: [customerId], references: [id])
+  ledger   PointsLedgerEntry[]
+}
+
+// -----------------------------------------------------------------------------
+// Avis
+// -----------------------------------------------------------------------------
+
+enum ReviewStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED // abusif / hors sujet
+}
+
+model Review {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  stationId      String       @db.Uuid
+  customerId     String       @db.Uuid
+  transactionId  String       @unique @db.Uuid // un avis par passage
+  attendantId    String?      @db.Uuid
+  rating         Int // 1 à 5
+  tags           String[] // accueil, rapidite, proprete, prix, boutique...
+  comment        String?
+  status         ReviewStatus @default(NEW)
+  handledById    String?      @db.Uuid
+  internalNote   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+  transaction  Transaction  @relation(fields: [transactionId], references: [id])
+  attendant    StaffUser?   @relation("ReviewAttendant", fields: [attendantId], references: [id])
+  handledBy    StaffUser?   @relation("ReviewHandler", fields: [handledById], references: [id])
+
+  @@index([stationId, status, createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// Offres, événements, notifications
+// -----------------------------------------------------------------------------
+
+enum AnnouncementKind {
+  OFFER
+  EVENT
+  NEWS
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+model Announcement {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  kind             AnnouncementKind
+  title            String
+  body             String
+  imageUrl         String?
+  startsAt         DateTime? // date de l'événement / début de l'offre
+  endsAt           DateTime?
+  location         String?
+  conditions       String?
+  contact          String?
+  /// Ciblage : vide = tout le monde.
+  targetStationIds String[]           @db.Uuid
+  targetTierRanks  Int[]
+  /// Le client présente son numéro à l'accueil pour un cadeau (une fois).
+  hasClaimableGift Boolean            @default(false)
+  notifyOnPublish  Boolean            @default(true)
+  status           AnnouncementStatus @default(DRAFT)
+  publishAt        DateTime?
+  createdById      String             @db.Uuid
+  createdAt        DateTime           @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  claims       AnnouncementClaim[]
+
+  @@index([organizationId, status, publishAt])
+}
+
+/// Présence à un événement / cadeau remis : une seule fois par client.
+model AnnouncementClaim {
+  id             String   @id @default(uuid()) @db.Uuid
+  announcementId String   @db.Uuid
+  customerId     String   @db.Uuid
+  stationId      String   @db.Uuid
+  staffId        String   @db.Uuid
+  createdAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+
+  @@unique([announcementId, customerId])
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+/// Journal des envois (push / SMS / WhatsApp), utile pour suivre le coût des SMS.
+model Notification {
+  id         String              @id @default(uuid()) @db.Uuid
+  customerId String              @db.Uuid
+  channel    NotificationChannel
+  template   String // tx_confirmed, reward_unlocked, event_invite...
+  payload    Json
+  status     NotificationStatus  @default(QUEUED)
+  costXof    Int?
+  error      String?
+  createdAt  DateTime            @default(now())
+  sentAt     DateTime?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// Anti-fraude et audit
+// -----------------------------------------------------------------------------
+
+enum FraudAlertType {
+  PIN_FAILED_REPEATED // PIN client faux plusieurs fois
+  OFFLINE_PIN_INVALID // passage hors ligne dont le PIN s'avère faux à la synchro
+  SELF_CREDIT_ATTEMPT // pompiste qui tente de créditer un numéro bloqué
+  VEHICLE_CAP_EXCEEDED
+  DAILY_CAP_EXCEEDED
+  LATE_SYNC
+  RECONCILIATION_GAP // litres fidélité > litres pompés
+  CUSTOMER_CONCENTRATION // un pompiste crédite toujours les mêmes clients
+  LOW_RATING // avis <= seuil
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  CLOSED
+}
+
+model FraudAlert {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  stationId      String         @db.Uuid
+  type           FraudAlertType
+  severity       AlertSeverity
+  status         AlertStatus    @default(OPEN)
+  staffId        String?        @db.Uuid
+  customerId     String?        @db.Uuid
+  transactionId  String?        @db.Uuid
+  shiftId        String?        @db.Uuid
+  details        Json
+  handledById    String?        @db.Uuid
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([stationId, status, createdAt])
+}
+
+enum ActorType {
+  STAFF
+  CUSTOMER
+  SYSTEM
+}
+
+/// Journal d'audit des opérations sensibles (passages, points, prix, droits).
+model AuditLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @db.Uuid
+  actorType      ActorType
+  actorId        String?   @db.Uuid
+  action         String // ex. transaction.cancel, price.update, staff.role_change
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  deviceId       String?   @db.Uuid
+  ip             String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+}

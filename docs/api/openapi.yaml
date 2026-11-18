@@ -1,0 +1,1161 @@
+openapi: 3.1.0
+info:
+  title: OLA STATION API
+  version: 0.1.0
+  description: |
+    Contrat entre le serveur et les trois applications :
+    - **App client** (Flutter) : préfixe `/v1/customer`
+    - **App pompiste** (Flutter) : préfixe `/v1/staff`
+    - **Back-office** (Next.js) : préfixe `/v1/admin`
+
+    Conventions :
+    - Montants en FCFA entiers (`amountXof`). Litres en nombre décimal à 2 chiffres.
+    - Téléphones au format E.164 : `+2250708000000`.
+    - Dates en ISO 8601 UTC.
+    - Erreurs métier : HTTP 422 avec un `code` stable (voir `Error`), que les apps traduisent en message.
+    - Les règles appliquées sont décrites dans `docs/01-regles-metier.md`.
+servers:
+  - url: http://localhost:3000
+    description: Développement local
+
+tags:
+  - name: Client - Authentification
+  - name: Client - Compte
+  - name: Client - Fidélité
+  - name: Pompiste - Session
+  - name: Pompiste - Clients
+  - name: Pompiste - Passages
+  - name: Pompiste - Cadeaux et événements
+  - name: Pompiste - Services
+  - name: Admin
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ===========================================================================
+  # APP CLIENT
+  # ===========================================================================
+  /v1/customer/auth/otp/request:
+    post:
+      tags: [Client - Authentification]
+      summary: Envoyer un code SMS
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, purpose]
+              properties:
+                phone: { $ref: '#/components/schemas/Phone' }
+                purpose: { type: string, enum: [REGISTER, LOGIN, PIN_RESET] }
+      responses:
+        '202':
+          description: Code envoyé (valable 5 minutes)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expiresAt: { type: string, format: date-time }
+                  retryAfterSeconds: { type: integer, example: 60 }
+        '422': { $ref: '#/components/responses/BusinessError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/customer/auth/otp/verify:
+    post:
+      tags: [Client - Authentification]
+      summary: Vérifier le code SMS
+      description: |
+        Si le numéro est déjà inscrit, renvoie directement une session.
+        Sinon, renvoie un `registrationToken` à utiliser dans `/v1/customer/register`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { $ref: '#/components/schemas/Phone' }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Code correct
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/CustomerSession'
+                  - type: object
+                    required: [registrationToken]
+                    properties:
+                      registrationToken: { type: string }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/customer/register:
+    post:
+      tags: [Client - Authentification]
+      summary: Créer son compte depuis l'app
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [registrationToken, firstName, pin, termsAccepted]
+              properties:
+                registrationToken: { type: string }
+                firstName: { type: string, maxLength: 50 }
+                lastName: { type: string, maxLength: 50 }
+                pin: { $ref: '#/components/schemas/Pin' }
+                vehicleType: { $ref: '#/components/schemas/VehicleType' }
+                termsAccepted: { type: boolean, const: true }
+                marketingConsent: { type: boolean, default: false }
+      responses:
+        '201':
+          description: Compte créé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerSession' }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/customer/auth/refresh:
+    post:
+      tags: [Client - Authentification]
+      summary: Renouveler la session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Nouvelle session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/customer/me:
+    get:
+      tags: [Client - Compte]
+      summary: Mon profil, mon solde et mon niveau
+      responses:
+        '200':
+          description: Profil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerProfile' }
+    patch:
+      tags: [Client - Compte]
+      summary: Modifier mon profil et mes préférences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                email: { type: string, format: email }
+                marketingConsent: { type: boolean }
+      responses:
+        '200':
+          description: Profil mis à jour
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerProfile' }
+    delete:
+      tags: [Client - Compte]
+      summary: Supprimer mon compte (anonymisation)
+      responses:
+        '204': { description: Compte supprimé }
+
+  /v1/customer/me/pin:
+    put:
+      tags: [Client - Compte]
+      summary: Changer mon PIN (ancien PIN, ou jeton OTP PIN_RESET)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPin]
+              properties:
+                currentPin: { $ref: '#/components/schemas/Pin' }
+                resetToken: { type: string }
+                newPin: { $ref: '#/components/schemas/Pin' }
+      responses:
+        '204': { description: PIN modifié }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/customer/me/qr:
+    get:
+      tags: [Client - Compte]
+      summary: Mon QR code
+      responses:
+        '200':
+          description: Contenu à encoder dans le QR
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qrPayload: { type: string, example: 'OLA1:7f3c9a2e4b8d4f1a9c6e' }
+    post:
+      tags: [Client - Compte]
+      summary: Régénérer mon QR code (carte perdue)
+      responses:
+        '200':
+          description: Nouveau QR
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qrPayload: { type: string }
+
+  /v1/customer/me/transactions:
+    get:
+      tags: [Client - Fidélité]
+      summary: Mon historique de passages
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Liste paginée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CustomerTransaction' }
+                  nextCursor: { type: [string, 'null'] }
+
+  /v1/customer/me/points:
+    get:
+      tags: [Client - Fidélité]
+      summary: Mon solde, ma progression et mes mouvements de points
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Points
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance: { type: integer, example: 255 }
+                  tier: { $ref: '#/components/schemas/TierProgress' }
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/LedgerEntry' }
+                  nextCursor: { type: [string, 'null'] }
+
+  /v1/customer/rewards:
+    get:
+      tags: [Client - Fidélité]
+      summary: Catalogue des cadeaux, avec ceux que je peux déjà obtenir
+      responses:
+        '200':
+          description: Cadeaux
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reward' }
+
+  /v1/customer/announcements:
+    get:
+      tags: [Client - Fidélité]
+      summary: Offres et événements qui me concernent (ciblage appliqué)
+      parameters:
+        - name: kind
+          in: query
+          schema: { type: string, enum: [OFFER, EVENT, NEWS] }
+      responses:
+        '200':
+          description: Annonces publiées
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Announcement' }
+
+  /v1/customer/reviews:
+    post:
+      tags: [Client - Fidélité]
+      summary: Noter un passage (une fois, dans les 72 h)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionId, rating]
+              properties:
+                transactionId: { type: string, format: uuid }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                tags:
+                  type: array
+                  items: { type: string, enum: [accueil, rapidite, proprete, prix, boutique, autre] }
+                comment: { type: string, maxLength: 500 }
+      responses:
+        '201': { description: Avis enregistré }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/customer/push-tokens:
+    post:
+      tags: [Client - Compte]
+      summary: Enregistrer le jeton de notifications du téléphone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token: { type: string }
+                platform: { type: string, enum: [android, ios] }
+      responses:
+        '204': { description: Enregistré }
+
+  # ===========================================================================
+  # APP POMPISTE
+  # ===========================================================================
+  /v1/staff/auth/login:
+    post:
+      tags: [Pompiste - Session]
+      summary: Connexion d'un pompiste sur un appareil de la station
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId, staffCode, pin]
+              properties:
+                deviceId: { type: string, format: uuid }
+                staffCode: { type: string, example: '104' }
+                pin: { $ref: '#/components/schemas/Pin' }
+      responses:
+        '200':
+          description: Session pompiste (rattachée à la station de l'appareil)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/staff/bootstrap:
+    get:
+      tags: [Pompiste - Session]
+      summary: Données de travail de la station (à garder en cache pour le hors ligne)
+      responses:
+        '200':
+          description: Produits, prix du jour, pistolets, règles, cadeaux et événements en cours
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffBootstrap' }
+
+  /v1/staff/customers/lookup:
+    get:
+      tags: [Pompiste - Clients]
+      summary: Trouver un client par numéro ou par QR
+      parameters:
+        - name: phone
+          in: query
+          schema: { $ref: '#/components/schemas/Phone' }
+        - name: qr
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Client trouvé (données limitées)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerSummary' }
+        '404': { description: Aucun client avec ce numéro ou ce QR }
+
+  /v1/staff/customers:
+    post:
+      tags: [Pompiste - Clients]
+      summary: Inscription express à la pompe
+      description: |
+        Si l'enseigne exige l'OTP (`requireOtpOnAssistedSignup`), appeler d'abord
+        `/v1/staff/customers/otp` puis transmettre `otpCode` lu par le client.
+        Le PIN est tapé par le client lui-même sur l'appareil.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, firstName, pin, vehicleType, termsAccepted]
+              properties:
+                phone: { $ref: '#/components/schemas/Phone' }
+                firstName: { type: string }
+                lastName: { type: string }
+                vehicleType: { $ref: '#/components/schemas/VehicleType' }
+                pin: { $ref: '#/components/schemas/Pin' }
+                otpCode: { type: string }
+                termsAccepted: { type: boolean, const: true }
+                marketingConsent: { type: boolean, default: false }
+      responses:
+        '201':
+          description: Client inscrit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerSummary' }
+        '409': { description: Ce numéro est déjà inscrit }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/staff/customers/otp:
+    post:
+      tags: [Pompiste - Clients]
+      summary: Envoyer un code SMS au client pour vérifier son numéro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { $ref: '#/components/schemas/Phone' }
+      responses:
+        '202': { description: Code envoyé }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/staff/transactions/quote:
+    post:
+      tags: [Pompiste - Passages]
+      summary: Calculer un passage sans l'enregistrer (récapitulatif montré au client)
+      description: L'app pompiste peut aussi calculer localement avec les données de `bootstrap` quand le réseau est coupé.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransactionInput' }
+      responses:
+        '200':
+          description: Récapitulatif
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionQuote' }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/staff/transactions:
+    post:
+      tags: [Pompiste - Passages]
+      summary: Enregistrer un passage confirmé par le PIN du client
+      description: |
+        Idempotent : renvoyer le même `id` renvoie le même résultat sans créer de doublon.
+        Codes d'erreur possibles : `CUSTOMER_INACTIVE`, `SELF_CREDIT_FORBIDDEN`, `PIN_INVALID`,
+        `PIN_LOCKED`, `VEHICLE_CAP_EXCEEDED`, `DAILY_CAP_EXCEEDED`, `PRICE_MISSING`, `NO_OPEN_SHIFT`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransactionCreate' }
+      responses:
+        '201':
+          description: Passage validé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionResult' }
+        '200':
+          description: Ce passage avait déjà été reçu (renvoi)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionResult' }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/staff/transactions/sync:
+    post:
+      tags: [Pompiste - Passages]
+      summary: Envoyer les passages saisis hors ligne
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/TransactionCreate' }
+      responses:
+        '200':
+          description: Un résultat par passage, dans le même ordre
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        status: { type: string, enum: [VALIDATED, REJECTED, DUPLICATE] }
+                        result: { $ref: '#/components/schemas/TransactionResult' }
+                        error: { $ref: '#/components/schemas/Error' }
+
+  /v1/staff/transactions/recent:
+    get:
+      tags: [Pompiste - Passages]
+      summary: Mes derniers passages du service en cours
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StaffTransaction' }
+
+  /v1/staff/redemptions:
+    post:
+      tags: [Pompiste - Cadeaux et événements]
+      summary: Remettre un cadeau contre des points (PIN du client)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId, rewardId, customerPin]
+              properties:
+                customerId: { type: string, format: uuid }
+                rewardId: { type: string, format: uuid }
+                customerPin: { $ref: '#/components/schemas/Pin' }
+      responses:
+        '201':
+          description: Cadeau remis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redemptionId: { type: string, format: uuid }
+                  pointsSpent: { type: integer }
+                  newBalance: { type: integer }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/staff/announcements/{announcementId}/claims:
+    post:
+      tags: [Pompiste - Cadeaux et événements]
+      summary: Enregistrer la présence d'un client à un événement (cadeau remis une fois)
+      parameters:
+        - name: announcementId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId]
+              properties:
+                customerId: { type: string, format: uuid }
+      responses:
+        '201': { description: Cadeau remis }
+        '409': { description: Ce client a déjà reçu le cadeau de cet événement }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/staff/shifts:
+    post:
+      tags: [Pompiste - Services]
+      summary: Ouvrir mon service avec les index de début
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [readings]
+              properties:
+                readings:
+                  type: array
+                  items: { $ref: '#/components/schemas/MeterReadingInput' }
+      responses:
+        '201':
+          description: Service ouvert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Shift' }
+        '409': { description: Un service est déjà ouvert pour ce pompiste }
+
+  /v1/staff/shifts/current:
+    get:
+      tags: [Pompiste - Services]
+      summary: Mon service en cours
+      responses:
+        '200':
+          description: Service
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Shift' }
+        '404': { description: Aucun service ouvert }
+
+  /v1/staff/shifts/{shiftId}/close:
+    post:
+      tags: [Pompiste - Services]
+      summary: Fermer mon service avec les index de fin
+      parameters:
+        - name: shiftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [readings]
+              properties:
+                readings:
+                  type: array
+                  items: { $ref: '#/components/schemas/MeterReadingInput' }
+      responses:
+        '200':
+          description: Service fermé et rapprochement calculé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Shift' }
+        '422': { $ref: '#/components/responses/BusinessError' }
+
+  /v1/staff/uploads:
+    post:
+      tags: [Pompiste - Services]
+      summary: Envoyer une photo (compteur, ticket)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Photo stockée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+
+  # ===========================================================================
+  # BACK-OFFICE (détaillé à l'étape 3)
+  # ===========================================================================
+  /v1/admin/auth/login:
+    post:
+      tags: [Admin]
+      summary: Connexion gérant / admin (téléphone + mot de passe)
+      security: []
+      responses:
+        '200': { description: Session }
+  /v1/admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Indicateurs (clients, passages, volumes, points, avis, taux de capture)
+      parameters:
+        - { name: stationId, in: query, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: Indicateurs }
+  /v1/admin/customers:
+    get:
+      tags: [Admin]
+      summary: Liste et recherche des clients
+      responses:
+        '200': { description: Liste }
+  /v1/admin/transactions:
+    get:
+      tags: [Admin]
+      summary: Liste des passages (filtres station, pompiste, produit, période)
+      responses:
+        '200': { description: Liste }
+  /v1/admin/transactions/{id}/cancel:
+    post:
+      tags: [Admin]
+      summary: Annuler un passage (motif obligatoire, points retirés)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Passage annulé }
+  /v1/admin/points/adjustments:
+    post:
+      tags: [Admin]
+      summary: Correction manuelle de points (motif obligatoire)
+      responses:
+        '201': { description: Correction enregistrée }
+  /v1/admin/prices:
+    get:
+      tags: [Admin]
+      summary: Prix du jour et historique
+      responses:
+        '200': { description: Prix }
+    post:
+      tags: [Admin]
+      summary: Nouveau prix applicable à partir d'une date
+      responses:
+        '201': { description: Prix enregistré }
+  /v1/admin/loyalty/settings:
+    get:
+      tags: [Admin]
+      summary: Paramètres de fidélité
+      responses:
+        '200': { description: Paramètres }
+    put:
+      tags: [Admin]
+      summary: Modifier les paramètres de fidélité
+      responses:
+        '200': { description: Paramètres modifiés }
+  /v1/admin/loyalty/rules:
+    get:
+      tags: [Admin]
+      summary: Règles de gain de points
+      responses:
+        '200': { description: Règles }
+  /v1/admin/rewards:
+    get:
+      tags: [Admin]
+      summary: Catalogue de cadeaux
+      responses:
+        '200': { description: Cadeaux }
+  /v1/admin/reviews:
+    get:
+      tags: [Admin]
+      summary: Avis (filtres station, pompiste, note, statut)
+      responses:
+        '200': { description: Avis }
+  /v1/admin/reviews/{id}:
+    patch:
+      tags: [Admin]
+      summary: Changer le statut d'un avis, ajouter une note interne
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Avis mis à jour }
+  /v1/admin/announcements:
+    get:
+      tags: [Admin]
+      summary: Offres et événements
+      responses:
+        '200': { description: Annonces }
+    post:
+      tags: [Admin]
+      summary: Créer une offre ou un événement (brouillon, programmé ou publié)
+      responses:
+        '201': { description: Annonce créée }
+  /v1/admin/staff:
+    get:
+      tags: [Admin]
+      summary: Personnel et rôles
+      responses:
+        '200': { description: Personnel }
+  /v1/admin/devices:
+    post:
+      tags: [Admin]
+      summary: Enrôler un téléphone de la station
+      responses:
+        '201': { description: Appareil enrôlé }
+  /v1/admin/shifts:
+    get:
+      tags: [Admin]
+      summary: Services et rapprochements (litres pompés vs litres fidélité)
+      responses:
+        '200': { description: Services }
+  /v1/admin/alerts:
+    get:
+      tags: [Admin]
+      summary: Alertes anti-fraude
+      responses:
+        '200': { description: Alertes }
+  /v1/admin/exports/{dataset}:
+    get:
+      tags: [Admin]
+      summary: Export CSV / Excel selon les droits
+      parameters:
+        - name: dataset
+          in: path
+          required: true
+          schema: { type: string, enum: [customers, transactions, reviews, ledger] }
+      responses:
+        '200': { description: Fichier }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    BusinessError:
+      description: Règle métier non respectée
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Non connecté ou session expirée
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Trop de tentatives, réessayer plus tard
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Phone:
+      type: string
+      pattern: '^\+[1-9][0-9]{7,14}$'
+      example: '+2250708000012'
+    Pin:
+      type: string
+      pattern: '^[0-9]{4}$'
+      writeOnly: true
+    VehicleType:
+      type: string
+      enum: [MOTO, CAR, TAXI, MINIBUS, TRUCK, OTHER]
+    PaymentMethod:
+      type: string
+      enum: [CASH, MOBILE_MONEY, CARD, OTHER, UNKNOWN]
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Code stable, traduit par les apps
+          enum:
+            - VALIDATION_FAILED
+            - OTP_INVALID
+            - OTP_EXPIRED
+            - PIN_TOO_WEAK
+            - PIN_INVALID
+            - PIN_LOCKED
+            - CUSTOMER_INACTIVE
+            - CUSTOMER_NOT_FOUND
+            - SELF_CREDIT_FORBIDDEN
+            - VEHICLE_CAP_EXCEEDED
+            - DAILY_CAP_EXCEEDED
+            - PRICE_MISSING
+            - NO_OPEN_SHIFT
+            - INSUFFICIENT_POINTS
+            - REWARD_UNAVAILABLE
+            - REVIEW_NOT_ALLOWED
+            - READINGS_INCOMPLETE
+            - READING_LOWER_THAN_START
+        message: { type: string, example: 'Code PIN incorrect. Il reste 2 essais.' }
+        details: { type: object, additionalProperties: true }
+
+    CustomerSession:
+      type: object
+      required: [accessToken, refreshToken, customer]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        customer: { $ref: '#/components/schemas/CustomerProfile' }
+
+    StaffSession:
+      type: object
+      properties:
+        accessToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+        staff:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            role: { type: string, enum: [ATTENDANT, CASHIER, MANAGER] }
+        station:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+
+    TierProgress:
+      type: object
+      properties:
+        current: { type: string, example: Silver }
+        rank: { type: integer, example: 2 }
+        windowPoints: { type: integer, description: Points gagnés sur la période, example: 820 }
+        next: { type: [string, 'null'], example: Gold }
+        pointsToNext: { type: [integer, 'null'], example: 680 }
+
+    CustomerProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        phone: { $ref: '#/components/schemas/Phone' }
+        firstName: { type: string }
+        lastName: { type: [string, 'null'] }
+        email: { type: [string, 'null'] }
+        pointsBalance: { type: integer }
+        visitCount: { type: integer }
+        tier: { $ref: '#/components/schemas/TierProgress' }
+        marketingConsent: { type: boolean }
+        vehicles:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              type: { $ref: '#/components/schemas/VehicleType' }
+              plate: { type: [string, 'null'] }
+
+    CustomerSummary:
+      type: object
+      description: Ce que le pompiste a le droit de voir
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string, example: 'Awa K.' }
+        maskedPhone: { type: string, example: '07 08 •• •• 12' }
+        tier: { type: string, example: Gold }
+        pointsBalance: { type: integer }
+        vehicleType: { $ref: '#/components/schemas/VehicleType' }
+        vehicleId: { type: string, format: uuid }
+        pinLocked: { type: boolean }
+        availableRewards:
+          type: array
+          items: { $ref: '#/components/schemas/Reward' }
+
+    TransactionInput:
+      type: object
+      required: [customerId, productId, inputMode, value]
+      properties:
+        customerId: { type: string, format: uuid }
+        vehicleId: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        inputMode: { type: string, enum: [LITERS, AMOUNT] }
+        value:
+          type: number
+          description: Litres (2 décimales) si LITERS, FCFA entiers si AMOUNT
+          example: 15
+
+    TransactionQuote:
+      type: object
+      properties:
+        liters: { type: [number, 'null'], example: 15 }
+        amountXof: { type: integer, example: 13125 }
+        unitPriceXof: { type: [integer, 'null'], example: 875 }
+        points: { type: integer, example: 15 }
+        countsAsVisit: { type: boolean }
+        warnings:
+          type: array
+          items: { type: string }
+
+    TransactionCreate:
+      allOf:
+        - $ref: '#/components/schemas/TransactionInput'
+        - type: object
+          required: [id, customerPin, occurredAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Généré par l'appareil (UUID v4) — garantit l'absence de doublon
+            customerPin: { $ref: '#/components/schemas/Pin' }
+            paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+            receiptRef: { type: string }
+            nozzleId: { type: string, format: uuid }
+            occurredAt: { type: string, format: date-time }
+            offline: { type: boolean, default: false }
+
+    TransactionResult:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [VALIDATED] }
+        liters: { type: [number, 'null'] }
+        amountXof: { type: integer }
+        pointsAwarded: { type: integer }
+        countsAsVisit: { type: boolean }
+        newBalance: { type: integer }
+        tierUp: { type: [string, 'null'], description: Nouveau niveau atteint, example: Gold }
+        unlockedRewards:
+          type: array
+          items: { $ref: '#/components/schemas/Reward' }
+
+    CustomerTransaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        stationName: { type: string }
+        productName: { type: string }
+        liters: { type: [number, 'null'] }
+        amountXof: { type: integer }
+        pointsAwarded: { type: integer }
+        attendantFirstName: { type: string }
+        canReview: { type: boolean }
+
+    StaffTransaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        customerDisplayName: { type: string }
+        productName: { type: string }
+        liters: { type: [number, 'null'] }
+        amountXof: { type: integer }
+        pointsAwarded: { type: integer }
+        syncedLate: { type: boolean }
+
+    LedgerEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [EARN, REDEEM, REVERSAL, ADJUST, EXPIRE, BONUS] }
+        delta: { type: integer, example: 15 }
+        balanceAfter: { type: integer }
+        label: { type: string, example: 'Super 15 L — Ola Latrie' }
+        createdAt: { type: string, format: date-time }
+
+    Reward:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Lavage offert }
+        description: { type: [string, 'null'] }
+        imageUrl: { type: [string, 'null'] }
+        pointsCost: { type: integer, example: 200 }
+        available: { type: boolean, description: Le client a assez de points et remplit les conditions }
+
+    Announcement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [OFFER, EVENT, NEWS] }
+        title: { type: string, example: Diffusion du match samedi }
+        body: { type: string }
+        imageUrl: { type: [string, 'null'] }
+        startsAt: { type: [string, 'null'], format: date-time }
+        endsAt: { type: [string, 'null'], format: date-time }
+        location: { type: [string, 'null'] }
+        conditions: { type: [string, 'null'] }
+        contact: { type: [string, 'null'] }
+        hasClaimableGift: { type: boolean }
+        claimed: { type: boolean, description: Le client a déjà reçu le cadeau }
+
+    StaffBootstrap:
+      type: object
+      properties:
+        station:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        products:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string, example: SUPER }
+              name: { type: string }
+              category: { type: string, enum: [FUEL, SHOP, SERVICE, GAS] }
+              unit: { type: string, enum: [LITER, AMOUNT] }
+              unitPriceXof: { type: [integer, 'null'], example: 875 }
+        nozzles:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              pumpNumber: { type: integer }
+              label: { type: string }
+              productId: { type: string, format: uuid }
+        loyaltyRules:
+          type: array
+          items:
+            type: object
+            properties:
+              productId: { type: [string, 'null'], format: uuid }
+              category: { type: [string, 'null'] }
+              type: { type: string, enum: [POINTS_PER_LITER, POINTS_PER_AMOUNT] }
+              points: { type: integer }
+              per: { type: number }
+        quickAmountsXof:
+          type: array
+          items: { type: integer }
+          example: [2000, 5000, 10000, 20000]
+        vehicleLiterCaps:
+          type: object
+          additionalProperties: { type: integer }
+        activeAnnouncements:
+          type: array
+          items: { $ref: '#/components/schemas/Announcement' }
+        rewards:
+          type: array
+          items: { $ref: '#/components/schemas/Reward' }
+
+    MeterReadingInput:
+      type: object
+      required: [nozzleId, valueLiters]
+      properties:
+        nozzleId: { type: string, format: uuid }
+        valueLiters: { type: number, example: 1284533.4 }
+        photoUrl: { type: string }
+
+    Shift:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [OPEN, CLOSED, REVIEWED] }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        transactionCount: { type: integer }
+        reconciliation:
+          type: array
+          items:
+            type: object
+            properties:
+              productName: { type: string }
+              pumpedLiters: { type: number, example: 1840.5 }
+              loyaltyLiters: { type: number, example: 644.2 }
+              captureRate: { type: number, example: 0.35 }
+              overCaptured: { type: boolean }
