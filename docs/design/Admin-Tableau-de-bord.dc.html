@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Back-office : tableau de bord</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#0B5D4B}a:hover{color:#07402F}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; background: #F4F5F0; color: #13201A; font-family: Inter, 'Segoe UI', system-ui, sans-serif; display: flex">
+
+  <nav aria-label="Menu" style="width: 232px; flex: none; background: #13201A; color: #FFFFFF; padding: 22px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 20px">
+      <div style="width: 34px; height: 34px; border-radius: 10px; background: #0B5D4B; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2A516" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c3.5 4.2 6 7.4 6 10.5a6 6 0 0 1-12 0C6 10.4 8.5 7.2 12 3z"/></svg>
+      </div>
+      <span style="font-family: 'Bricolage Grotesque', 'Segoe UI', sans-serif; font-weight: 800; font-size: 18px">OLA STATION</span>
+    </div>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; background: #0B5D4B; color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 700">Tableau de bord</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Passages</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Clients</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px; display: flex; justify-content: space-between">Avis <span style="padding: 0 8px; border-radius: 999px; background: #F2A516; color: #13201A; font-weight: 800; font-size: 12px">4</span></a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Offres et événements</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Cadeaux</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Services et index</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px; display: flex; justify-content: space-between">Alertes <span style="padding: 0 8px; border-radius: 999px; background: #B3261E; color: #FFFFFF; font-weight: 800; font-size: 12px">2</span></a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Personnel</a>
+    <a href="#" style="padding: 11px 12px; border-radius: 10px; color: #D5DDD8; text-decoration: none; font-size: 14px">Prix et paramètres</a>
+  </nav>
+
+  <main style="flex: 1; min-width: 0; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <h1 style="margin: 0; font-family: 'Bricolage Grotesque', 'Segoe UI', sans-serif; font-weight: 800; font-size: 26px">Tableau de bord</h1>
+        <span style="font-size: 13px; color: #4A5A52">Données d'exemple</span>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <label for="station" style="position: absolute; left: -9999px">Station</label>
+        <select id="station" style="height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCE1D9; background: #FFFFFF; font-family: Inter, sans-serif; font-size: 14px; color: #13201A"><option>Ola Latrie</option></select>
+        <label for="periode" style="position: absolute; left: -9999px">Période</label>
+        <select id="periode" style="height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCE1D9; background: #FFFFFF; font-family: Inter, sans-serif; font-size: 14px; color: #13201A"><option>7 derniers jours</option></select>
+        <button type="button" style="height: 42px; padding: 0 16px; border-radius: 10px; border: 2px solid #0B5D4B; background: #FFFFFF; color: #0B5D4B; font-family: Inter, sans-serif; font-size: 14px; font-weight: 700">Exporter</button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+      <div style="background: #FFFFFF; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 13px; color: #4A5A52">Clients inscrits</span>
+        <span style="font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums">1 248</span>
+        <span style="font-size: 13px; color: #0B5D4B; font-weight: 700">+86 cette semaine</span>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 13px; color: #4A5A52">Passages fidélité</span>
+        <span style="font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums">2 310</span>
+        <span style="font-size: 13px; color: #4A5A52">dont 612 en boutique</span>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 13px; color: #4A5A52">Litres fidélité</span>
+        <span style="font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums">31 540 L</span>
+        <span style="font-size: 13px; color: #4A5A52">sur 92 760 L pompés</span>
+      </div>
+      <div style="background: #0B5D4B; color: #FFFFFF; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 13px; opacity: 0.9">Taux de capture</span>
+        <span style="font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums">34 %</span>
+        <span style="font-size: 13px; font-weight: 700; color: #F8D98A">+5 pts vs semaine passée</span>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0">
+      <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+        <div style="background: #FFFFFF; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between"><b style="font-size: 15px">Litres fidélité par jour</b><span style="font-size: 13px; color: #4A5A52">Super + Gasoil</span></div>
+          <div style="display: flex; gap: 10px">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 160px; font-size: 11px; color: #4A5A52; text-align: right; font-variant-numeric: tabular-nums"><span>6 000</span><span>4 000</span><span>2 000</span><span>0</span></div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+              <div style="position: relative; height: 160px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; align-items: end; border-bottom: 1px solid #C9D0C6; background: linear-gradient(#EEF0EB 1px, transparent 1px) 0 0 / 100% 53.33px">
+                <div style="height: 110px; border-radius: 6px 6px 0 0; background: #0B5D4B"></div>
+                <div style="height: 117px; border-radius: 6px 6px 0 0; background: #0B5D4B"></div>
+                <div style="height: 108px; border-radius: 6px 6px 0 0; background: #0B5D4B"></div>
+                <div style="height: 123px; border-radius: 6px 6px 0 0; background: #0B5D4B"></div>
+                <div style="height: 134px; border-radius: 6px 6px 0 0; background: #0B5D4B"></div>
+                <div style="height: 142px; border-radius: 6px 6px 0 0; background: #F2A516"></div>
+                <div style="height: 107px; border-radius: 6px 6px 0 0; background: #0B5D4B"></div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; font-size: 12px; color: #4A5A52; text-align: center"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span style="color: #13201A; font-weight: 700">Sam 5 340</span><span>Dim</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px">
+          <b style="font-size: 15px">Pompistes de la semaine</b>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); font-size: 12px; color: #4A5A52; padding: 4px 0; border-bottom: 1px solid #EEF0EB"><span>Pompiste</span><span>Passages</span><span>Inscriptions</span><span>Note moyenne</span></div>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); font-size: 14px; padding: 6px 0; border-bottom: 1px solid #EEF0EB; font-variant-numeric: tabular-nums"><b>1. Yao</b><span>512</span><span>31</span><span>4,7 ★</span></div>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); font-size: 14px; padding: 6px 0; border-bottom: 1px solid #EEF0EB; font-variant-numeric: tabular-nums"><span>2. Mariam</span><span>468</span><span>22</span><span>4,6 ★</span></div>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); font-size: 14px; padding: 6px 0; font-variant-numeric: tabular-nums"><span>3. Koffi</span><span>401</span><span>14</span><span>3,9 ★</span></div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+        <div style="background: #FFFFFF; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; justify-content: space-between"><b style="font-size: 15px">Alertes à traiter</b><a href="#" style="font-size: 13px; font-weight: 700">Tout voir</a></div>
+          <div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #FBE9E7">
+            <span style="flex: none; width: 8px; border-radius: 4px; background: #B3261E"></span>
+            <div style="display: flex; flex-direction: column; gap: 2px; font-size: 13px"><b style="color: #8C1D18">Écart d'index · service de Koffi, mardi</b><span>212 L saisis pour des clients, 198 L pompés sur ses pistolets Gasoil.</span></div>
+          </div>
+          <div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #FDF3DC">
+            <span style="flex: none; width: 8px; border-radius: 4px; background: #C98700"></span>
+            <div style="display: flex; flex-direction: column; gap: 2px; font-size: 13px"><b style="color: #6B4A00">3 PIN faux · client 05 •• •• 77</b><span>Compte verrouillé 15 min, passage chez Koffi, jeudi 18:12.</span></div>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1">
+          <div style="display: flex; justify-content: space-between"><b style="font-size: 15px">Avis récents</b><span style="font-size: 13px; color: #4A5A52">Moyenne 4,4 ★ sur 186</span></div>
+          <div style="display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid #EEF0EB; font-size: 13px">
+            <div style="display: flex; justify-content: space-between"><b>2 ★ · Koffi · Propreté</b><span style="padding: 1px 8px; border-radius: 999px; background: #FBE9E7; color: #8C1D18; font-weight: 700; font-size: 11px">NOUVEAU</span></div>
+            <span style="color: #4A5A52">« Toilettes fermées et pas de réponse. »</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid #EEF0EB; font-size: 13px">
+            <div style="display: flex; justify-content: space-between"><b>5 ★ · Yao · Accueil</b><span style="padding: 1px 8px; border-radius: 999px; background: #E3F0EB; color: #0B5D4B; font-weight: 700; font-size: 11px">LU</span></div>
+            <span style="color: #4A5A52">« Très rapide ce matin, merci. »</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px; font-size: 13px">
+            <div style="display: flex; justify-content: space-between"><b>4 ★ · Mariam · Boutique</b><span style="padding: 1px 8px; border-radius: 999px; background: #E3F0EB; color: #0B5D4B; font-weight: 700; font-size: 11px">LU</span></div>
+            <span style="color: #4A5A52">« Il manquait de l'eau fraîche. »</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

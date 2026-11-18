@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Client : taper son PIN</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#0B5D4B}a:hover{color:#07402F}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #FFFFFF; color: #13201A; font-family: Inter, 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <div style="background: #F2A516; color: #13201A; padding: 16px 20px; display: flex; align-items: center; gap: 12px">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <div style="display: flex; flex-direction: column">
+      <span style="font-size: 17px; font-weight: 800">À vous, Awa</span>
+      <span style="font-size: 13px">Vérifiez puis tapez votre code secret</span>
+    </div>
+  </div>
+
+  <div style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 16px">
+    <div style="border: 2px dashed #DCE1D9; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; justify-content: space-between; font-size: 16px"><span>Super</span><b style="font-variant-numeric: tabular-nums">15 L</b></div>
+      <div style="display: flex; justify-content: space-between; font-size: 16px"><span>Montant</span><b style="font-variant-numeric: tabular-nums">13 125 F</b></div>
+      <div style="display: flex; justify-content: space-between; font-size: 16px"><span>Pompiste</span><b>Yao</b></div>
+      <div style="display: flex; justify-content: space-between; font-size: 16px; padding-top: 8px; border-top: 1px solid #EEF0EB"><span>Vous gagnez</span><b style="color: #0B5D4B; font-variant-numeric: tabular-nums">+15 points</b></div>
+    </div>
+
+    <div style="display: flex; justify-content: center; gap: 18px; padding: 6px 0" aria-label="2 chiffres sur 4 saisis">
+      <span style="width: 20px; height: 20px; border-radius: 50%; background: #13201A"></span>
+      <span style="width: 20px; height: 20px; border-radius: 50%; background: #13201A"></span>
+      <span style="width: 20px; height: 20px; border-radius: 50%; border: 3px solid #13201A; box-sizing: border-box"></span>
+      <span style="width: 20px; height: 20px; border-radius: 50%; border: 3px solid #13201A; box-sizing: border-box"></span>
+    </div>
+  </div>
+
+  <div style="flex: 1; padding: 8px 20px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-content: end">
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">1</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">2</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">3</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">4</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">5</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">6</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">7</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">8</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">9</button>
+    <button type="button" aria-label="Ce n'est pas bon, annuler" style="height: 68px; border: 0; border-radius: 16px; background: #FBE9E7; color: #B3261E; font-family: Inter, sans-serif; font-size: 14px; font-weight: 800">Pas bon</button>
+    <button type="button" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; font-family: Inter, sans-serif; font-size: 28px; font-weight: 600; color: #13201A">0</button>
+    <button type="button" aria-label="Effacer" style="height: 68px; border: 0; border-radius: 16px; background: #F4F5F0; color: #13201A; display: flex; align-items: center; justify-content: center">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 5H9l-6 7 6 7h12z"/><path d="M17 9l-6 6M11 9l6 6"/></svg>
+    </button>
+  </div>
+
+  <span style="padding: 14px 20px 22px; font-size: 13px; color: #4A5A52; text-align: center">Code oublié ? Demandez au pompiste de le réinitialiser par SMS.</span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

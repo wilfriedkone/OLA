@@ -27,11 +27,13 @@ Site pilote : **Ola Latrie, Abidjan**. Architecture multi-stations et multi-ense
 - [Modèle de données](docs/02-modele-donnees.md) : les tables et les garanties.
 - [Contrat d'API](docs/api/openapi.yaml) : les échanges entre les apps et le serveur (OpenAPI 3.1).
 - [Schéma Prisma](api/prisma/schema.prisma) : source de vérité de la base.
+- [Charte graphique](docs/03-charte-graphique.md) : couleurs, typographie, tailles, écrans v0.1.
+- [Valeurs à confirmer](docs/04-valeurs-a-confirmer.md) : prix, points, plafonds et seuils en attente du client.
 
 ## Avancement
 
 - [x] **Étape 1** : modèle de données, règles métier, contrat d'API
-- [ ] Étape 1 bis : charte visuelle et maquettes des 5 écrans clés
+- [x] Étape 1 bis : charte graphique et maquettes (docs/03-charte-graphique.md)
 - [ ] **Étape 2** : serveur (inscription, passages, PIN, anti-fraude, points) + app pompiste
 - [ ] **Étape 3** : app client + back-office
 - [ ] **Étape 4** : test réel à Ola Latrie

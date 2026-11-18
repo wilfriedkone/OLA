@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Pompiste : saisir le passage</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#0B5D4B}a:hover{color:#07402F}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F5F0; color: #13201A; font-family: Inter, 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <div style="background: #0B5D4B; color: #FFFFFF; padding: 14px 16px; display: flex; align-items: center; gap: 12px">
+    <button type="button" aria-label="Retour" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.14); color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <span style="font-size: 17px; font-weight: 700">Nouveau passage</span>
+  </div>
+
+  <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: #FDF3DC">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="display: flex; align-items: center; gap: 8px"><b style="font-size: 17px">Awa K.</b><span style="padding: 2px 8px; border-radius: 999px; background: #F8EAC4; color: #7A5A00; font-size: 11px; font-weight: 800">GOLD</span></span>
+        <span style="font-size: 13px; color: #4A5A52">Taxi · 07 08 •• •• 12</span>
+      </div>
+      <span style="font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums">240 pts</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span style="font-size: 14px; font-weight: 600">Produit</span>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <button type="button" aria-pressed="true" style="height: 56px; border-radius: 14px; border: 2px solid #0B5D4B; background: #E3F0EB; color: #0B5D4B; font-family: Inter, sans-serif; font-size: 16px; font-weight: 800">Super</button>
+        <button type="button" aria-pressed="false" style="height: 56px; border-radius: 14px; border: 2px solid #DCE1D9; background: #FFFFFF; color: #13201A; font-family: Inter, sans-serif; font-size: 16px; font-weight: 600">Gasoil</button>
+        <button type="button" aria-pressed="false" style="height: 56px; border-radius: 14px; border: 2px solid #DCE1D9; background: #FFFFFF; color: #13201A; font-family: Inter, sans-serif; font-size: 16px; font-weight: 600">Boutique</button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 4px; border-radius: 14px; background: #E6E9E2">
+      <button type="button" aria-pressed="true" style="height: 44px; border: 0; border-radius: 11px; background: #FFFFFF; color: #13201A; font-family: Inter, sans-serif; font-size: 15px; font-weight: 700">En litres</button>
+      <button type="button" aria-pressed="false" style="height: 44px; border: 0; border-radius: 11px; background: transparent; color: #4A5A52; font-family: Inter, sans-serif; font-size: 15px; font-weight: 600">En FCFA</button>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px">
+      <span style="font-size: 52px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.05">15 L</span>
+      <span style="font-size: 15px; color: #4A5A52">= <b style="color: #13201A; font-variant-numeric: tabular-nums">13 125 F</b> · Super à 875 F/L</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+      <button type="button" style="height: 48px; border-radius: 12px; border: 2px solid #DCE1D9; background: #FFFFFF; font-family: Inter, sans-serif; font-size: 15px; font-weight: 700; color: #13201A">5 L</button>
+      <button type="button" style="height: 48px; border-radius: 12px; border: 2px solid #DCE1D9; background: #FFFFFF; font-family: Inter, sans-serif; font-size: 15px; font-weight: 700; color: #13201A">10 L</button>
+      <button type="button" style="height: 48px; border-radius: 12px; border: 2px solid #0B5D4B; background: #E3F0EB; font-family: Inter, sans-serif; font-size: 15px; font-weight: 800; color: #0B5D4B">15 L</button>
+      <button type="button" style="height: 48px; border-radius: 12px; border: 2px solid #DCE1D9; background: #FFFFFF; font-family: Inter, sans-serif; font-size: 15px; font-weight: 700; color: #13201A">Plein</button>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 14px; background: #FFFFFF">
+      <span style="font-size: 15px">Points gagnés</span>
+      <span style="font-size: 20px; font-weight: 800; color: #0B5D4B; font-variant-numeric: tabular-nums">+15 pts</span>
+    </div>
+
+    <div style="display: flex; gap: 8px; align-items: center; font-size: 13px; color: #4A5A52">
+      <span>Paiement :</span>
+      <span style="padding: 6px 10px; border-radius: 999px; background: #13201A; color: #FFFFFF; font-weight: 700">Espèces</span>
+      <span style="padding: 6px 10px; border-radius: 999px; background: #FFFFFF; border: 1px solid #DCE1D9; font-weight: 600; color: #13201A">Mobile Money</span>
+    </div>
+  </div>
+
+  <div style="padding: 0 16px 22px">
+    <button type="button" style="width: 100%; height: 64px; border: 0; border-radius: 16px; background: #0B5D4B; color: #FFFFFF; font-family: Inter, sans-serif; font-size: 18px; font-weight: 800">Faire valider par le client</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
